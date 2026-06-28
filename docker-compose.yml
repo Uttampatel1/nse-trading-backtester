@@ -1,0 +1,10 @@
+services:
+  app:
+    build: .
+    image: nse-trading-backtester:latest
+    container_name: nse-trading-backtester
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    restart: unless-stopped

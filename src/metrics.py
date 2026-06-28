@@ -34,6 +34,26 @@ def sharpe_ratio(
     return float(excess.mean() / excess.std(ddof=0) * np.sqrt(trading_days))
 
 
+def sortino_ratio(
+    returns: pd.Series,
+    risk_free_rate: float = 0.06,
+    trading_days: int = 252,
+) -> float:
+    """Annualised Sortino ratio — like Sharpe, but penalises only downside risk.
+
+    Upside volatility shouldn't count against a strategy; Sortino divides excess
+    return by the *downside* deviation (std of returns below the target) instead
+    of total volatility, so it rewards strategies whose swings are mostly up.
+    """
+    daily_rf = (1 + risk_free_rate) ** (1 / trading_days) - 1
+    excess = returns - daily_rf
+    downside = excess[excess < 0]
+    downside_dev = np.sqrt((downside**2).mean()) if len(downside) else 0.0
+    if downside_dev == 0:
+        return 0.0
+    return float(excess.mean() / downside_dev * np.sqrt(trading_days))
+
+
 def max_drawdown(equity: pd.Series) -> float:
     """Worst peak-to-trough decline as a (negative) fraction."""
     running_max = equity.cummax()
@@ -60,6 +80,7 @@ def summary(
         "Total Return %": round(total_return(equity) * 100, 2),
         "CAGR %": round(cagr(equity, trading_days) * 100, 2),
         "Sharpe": round(sharpe_ratio(returns, risk_free_rate, trading_days), 2),
+        "Sortino": round(sortino_ratio(returns, risk_free_rate, trading_days), 2),
         "Max Drawdown %": round(max_drawdown(equity) * 100, 2),
         "Calmar": round(calmar_ratio(equity, trading_days), 2),
         "Volatility %": round(annualised_volatility(returns, trading_days) * 100, 2),

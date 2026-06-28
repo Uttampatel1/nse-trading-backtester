@@ -10,15 +10,17 @@ This project is a small but **honest** vectorised backtesting engine for NSE-sty
 
 ## Key results (5-ticker equal-weight portfolio, 2018–2023, after 0.10%/trade costs)
 
-| Strategy | Total Return | CAGR | Sharpe | Max Drawdown | Trades |
-|----------|-------------:|-----:|-------:|-------------:|-------:|
-| **SMA 20/50 (trend)** ✅ best | **+6.1%** | +0.96% | **-0.80** | **-22.4%** | 161 |
-| Buy & Hold (baseline) | -21.0% | -3.73% | -1.03 | -33.8% | 5 |
-| RSI(14) 30/55 (mean-reversion) | -22.8% | -4.07% | -2.28 | -26.6% | 108 |
+| Strategy | Total Return | CAGR | Sharpe | Sortino | Max Drawdown | Trades |
+|----------|-------------:|-----:|-------:|--------:|-------------:|-------:|
+| **Donchian(20) breakout** ✅ best | **+33.8%** | +4.80% | **-0.17** | **-0.17** | **-11.5%** | 172 |
+| SMA 20/50 (trend) | +6.1% | +0.96% | -0.80 | -0.78 | -22.4% | 161 |
+| Buy & Hold (baseline) | -21.0% | -3.73% | -1.03 | -0.98 | -33.8% | 5 |
+| RSI(14) 30/55 (mean-reversion) | -22.8% | -4.07% | -2.28 | -2.40 | -26.6% | 108 |
+| Bollinger(20, 2sd) (mean-reversion) | -48.7% | -10.19% | -3.50 | -3.43 | -49.4% | 271 |
 
 *(Reproducible from `python -m src.run_backtest` on the default synthetic universe and seed.)*
 
-**What this says:** over a choppy-to-bearish simulated regime, the **trend-following SMA crossover was the only strategy to end positive** and it cut the worst drawdown from **-34% to -22%** — because it moves to cash when the trend breaks. Mean-reversion "bought the dips" all the way down and underperformed even buy-and-hold.
+**What this says:** over a choppy-to-bearish simulated regime, the two **trend/breakout** rules were the only ones to end positive — the **Donchian channel breakout led with +33.8% while suffering the smallest drawdown (-11.5%, vs -34% for buy-and-hold)**. Both **mean-reversion** rules "bought the dips" all the way down and underperformed even buy-and-hold; Bollinger was the worst. The lesson repeats across markets: in a downtrend, *cutting losers fast* beats *averaging into them*.
 
 **A practitioner's read on the result:**
 - The headline isn't "we found alpha" — it's **risk control**. Trend rules earn their keep mainly by *avoiding* large losses, not by maximising upside.
@@ -51,10 +53,13 @@ Every strategy implements one tiny interface (`signal(ohlcv) -> position`), so a
 ## Tech stack
 
 - **Engine:** pandas, NumPy (fully vectorised)
-- **Metrics:** CAGR, annualised Sharpe, max drawdown, Calmar, volatility
+- **Strategies:** buy & hold, SMA crossover, RSI mean-reversion, **Donchian breakout**, **Bollinger mean-reversion**
+- **Metrics:** CAGR, annualised Sharpe, **Sortino** (downside-only risk), max drawdown, Calmar, volatility
 - **Data:** deterministic synthetic generator (default) · optional `yfinance` for real NSE history
 - **App:** Streamlit dashboard
-- **Tests:** pytest (16 tests)
+- **Observability:** structured logging via `src/logging_utils.py` (`LOG_LEVEL` env, per-strategy timing)
+- **Deploy:** `Dockerfile` + `docker-compose.yml`; GitHub Actions CI runs the suite
+- **Tests:** pytest (24 tests)
 
 ## Setup & run
 
@@ -85,11 +90,15 @@ python -m src.run_backtest
 ├── src/
 │   ├── config.py           # typed settings from .env
 │   ├── data.py             # synthetic OHLCV generator + optional yfinance loader
-│   ├── strategies.py       # BuyAndHold, SMACrossover, RSIMeanReversion
+│   ├── strategies.py       # BuyAndHold, SMA, RSI, Donchian, Bollinger
 │   ├── backtest.py         # vectorised engine (no look-ahead, costs on turnover)
-│   ├── metrics.py          # CAGR / Sharpe / drawdown / Calmar
+│   ├── metrics.py          # CAGR / Sharpe / Sortino / drawdown / Calmar
+│   ├── logging_utils.py    # structured logging + timing
 │   └── run_backtest.py     # full comparison + equity-curve plot
-├── tests/                  # 16 pytest tests
+├── tests/                  # 24 pytest tests
+├── Dockerfile              # containerised Streamlit app
+├── docker-compose.yml
+├── .github/workflows/ci.yml
 ├── .env.example
 ├── requirements.txt
 └── .gitignore

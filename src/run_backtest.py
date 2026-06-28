@@ -17,17 +17,22 @@ import pandas as pd  # noqa: E402
 from .backtest import run_portfolio  # noqa: E402
 from .config import get_settings  # noqa: E402
 from .data import load_panel  # noqa: E402
+from .logging_utils import get_logger, log_timing  # noqa: E402
 from .strategies import default_strategies  # noqa: E402
+
+log = get_logger(__name__)
 
 
 def run() -> pd.DataFrame:
     settings = get_settings()
     panel = load_panel(settings)
+    log.info("Loaded %d tickers from source=%s", len(panel), settings.data_source)
 
     rows = []
     curves: dict[str, pd.Series] = {}
     for strategy in default_strategies():
-        result = run_portfolio(panel, strategy, settings)
+        with log_timing(log, f"backtest {strategy.name}"):
+            result = run_portfolio(panel, strategy, settings)
         rows.append({"Strategy": result.strategy, **result.metrics})
         curves[result.strategy] = result.equity
 

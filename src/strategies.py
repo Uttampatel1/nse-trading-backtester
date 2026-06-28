@@ -90,5 +90,59 @@ class RSIMeanReversion:
         return pd.Series(pos, index=ohlcv.index, name="position")
 
 
+@dataclass
+class DonchianBreakout:
+    """Trend breakout: go long on a new N-day high, exit on a new N-day low.
+
+    The classic 'turtle' channel rule. Uses prior-bar extremes (shifted) so the
+    breakout level is known before today's bar — no look-ahead.
+    """
+
+    channel: int = 20
+    name: str = "Donchian Breakout"
+
+    def __post_init__(self) -> None:
+        if self.channel < 2:
+            raise ValueError("channel must be >= 2")
+        self.name = f"Donchian({self.channel})"
+
+    def signal(self, ohlcv: pd.DataFrame) -> pd.Series:
+        upper = ohlcv["high"].rolling(self.channel).max().shift(1)
+        lower = ohlcv["low"].rolling(self.channel).min().shift(1)
+        close = ohlcv["close"]
+        raw = pd.Series(np.nan, index=ohlcv.index)
+        raw[close > upper] = 1.0
+        raw[close < lower] = 0.0
+        return raw.ffill().fillna(0.0).rename("position")
+
+
+@dataclass
+class BollingerMeanReversion:
+    """Mean reversion: buy when price closes below the lower band, exit at the mean."""
+
+    window: int = 20
+    num_std: float = 2.0
+    name: str = "Bollinger Mean Reversion"
+
+    def __post_init__(self) -> None:
+        self.name = f"Bollinger({self.window}, {self.num_std:g}sd)"
+
+    def signal(self, ohlcv: pd.DataFrame) -> pd.Series:
+        close = ohlcv["close"]
+        mid = close.rolling(self.window).mean()
+        sd = close.rolling(self.window).std(ddof=0)
+        lower = mid - self.num_std * sd
+        raw = pd.Series(np.nan, index=ohlcv.index)
+        raw[close < lower] = 1.0   # enter on a stretched-down close
+        raw[close > mid] = 0.0     # exit once it reverts to the mean
+        return raw.ffill().fillna(0.0).rename("position")
+
+
 def default_strategies() -> list[Strategy]:
-    return [BuyAndHold(), SMACrossover(20, 50), RSIMeanReversion(14, 30, 55)]
+    return [
+        BuyAndHold(),
+        SMACrossover(20, 50),
+        RSIMeanReversion(14, 30, 55),
+        DonchianBreakout(20),
+        BollingerMeanReversion(20, 2.0),
+    ]
