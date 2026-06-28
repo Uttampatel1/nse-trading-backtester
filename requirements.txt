@@ -1,0 +1,18 @@
+# Data / math
+numpy>=1.26,<3.0
+pandas==2.3.3
+
+# Viz / dashboard
+matplotlib==3.9.2
+streamlit==1.41.1
+
+# Config
+python-dotenv==1.0.1
+
+# Optional: pull real NSE history instead of synthetic data
+#   pip install yfinance==0.2.50
+#   then set DATA_SOURCE=yfinance in .env
+yfinance==0.2.50
+
+# Dev / tests
+pytest==8.3.4
