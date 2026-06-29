@@ -8,6 +8,23 @@ This project is a small but **honest** vectorised backtesting engine for NSE-sty
 
 ---
 
+<!-- portfolio-visuals -->
+
+## 🔧 How it works
+
+![NSE Trading Strategy Backtester — architecture & data flow](./architecture.svg)
+
+*End-to-end flow from input to output — see [`architecture.svg`](./architecture.svg).*
+
+## 📊 Live dashboard
+
+![NSE Trading Strategy Backtester — interactive Streamlit dashboard](./dashboard.png)
+
+*Real screenshot of the Streamlit app on synthetic data — no API key needed. Run it with `streamlit run dashboard.py`.*
+
+---
+
+
 ## Key results (5-ticker equal-weight portfolio, 2018–2023, after 0.10%/trade costs)
 
 | Strategy | Total Return | CAGR | Sharpe | Sortino | Max Drawdown | Trades |
