@@ -14,11 +14,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from .backtest import run_portfolio  # noqa: E402
+from .backtest import run_backtest, run_portfolio  # noqa: E402
 from .config import get_settings  # noqa: E402
 from .data import load_panel  # noqa: E402
 from .logging_utils import get_logger, log_timing  # noqa: E402
-from .strategies import default_strategies  # noqa: E402
+from .strategies import SMACrossover, default_strategies  # noqa: E402
+from .walkforward import optimize_on_slice, walk_forward_optimize  # noqa: E402
 
 log = get_logger(__name__)
 
@@ -61,5 +62,35 @@ def run() -> pd.DataFrame:
     return table
 
 
+def run_walkforward() -> pd.DataFrame:
+    """In-sample-optimised vs walk-forward OOS SMA — quantifies overfitting."""
+    settings = get_settings()
+    panel = load_panel(settings)
+    grid = {"fast": [5, 10, 20, 30], "slow": [50, 100, 150, 200]}
+
+    rows = []
+    for tkr, df in panel.items():
+        best, _ = optimize_on_slice(df, SMACrossover, grid, "Sharpe", settings)
+        is_stats = run_backtest(df, SMACrossover(**best), tkr, settings).metrics
+        wf = walk_forward_optimize(df, SMACrossover, grid,
+                                   is_size=378, oos_size=126, settings=settings)
+        rows.append({
+            "Ticker": tkr,
+            "IS Sharpe (overfit)": is_stats["Sharpe"],
+            "OOS Sharpe (honest)": wf.metrics["Sharpe"],
+            "OOS Return %": wf.metrics["Total Return %"],
+            "Windows": wf.n_windows,
+        })
+    table = pd.DataFrame(rows).set_index("Ticker")
+    print("\n=== Walk-forward parameter optimization (SMA grid) ===")
+    print("In-sample-optimised Sharpe is what a naive backtest reports; OOS is what")
+    print("you'd actually have earned. The gap is overfitting.\n")
+    print(table.to_string())
+    print(f"\nMean IS Sharpe {table['IS Sharpe (overfit)'].mean():.2f} vs "
+          f"OOS Sharpe {table['OOS Sharpe (honest)'].mean():.2f}")
+    return table
+
+
 if __name__ == "__main__":
     run()
+    run_walkforward()

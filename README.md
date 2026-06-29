@@ -45,6 +45,33 @@ This project is a small but **honest** vectorised backtesting engine for NSE-sty
 - **Always benchmark against buy-and-hold.** Many "strategies" quietly lose to it once costs are in.
 - Results are **regime-dependent**. A different synthetic seed (or real history over a bull run) can flip the ranking — which is exactly why a configurable, reproducible backtester matters.
 
+## Walk-forward optimization: how backtests lie
+
+Grid-searching parameters over your whole history and reporting the best Sharpe is the
+classic way to fool yourself — you're fitting noise. `src/walkforward.py` does it
+honestly: at each step it tunes the strategy on an **in-sample** block, then trades
+those parameters on the **next, unseen out-of-sample** block, and stitches the OOS
+results into one curve built only from decisions made *before* the data they traded.
+
+Optimising an SMA grid (`fast ∈ {5,10,20,30}`, `slow ∈ {50,100,150,200}`) per ticker:
+
+| Ticker | In-sample Sharpe (what a naive backtest reports) | Walk-forward OOS Sharpe (honest) | OOS Return |
+|--------|---:|---:|---:|
+| ITC.NS | 0.83 | **1.19** | +160% |
+| INFY.NS | −0.10 | −0.36 | +3.9% |
+| TCS.NS | −0.40 | −0.53 | +1.7% |
+| HDFCBANK.NS | −0.51 | −0.74 | −14.4% |
+| RELIANCE.NS | −0.49 | −1.07 | −27.4% |
+| **Mean** | **−0.13** | **−0.30** | — |
+
+*(Reproducible from `python -m src.run_backtest`.)*
+
+**What this exposes:** the in-sample-optimal windows **drift every period** (RELIANCE picks
+20/50, then 30/100, then 30/50, then 10/100…) and the chosen settings *don't carry forward* —
+one window scores **+0.54 in-sample but −2.77 out-of-sample**. Only ITC, which genuinely
+trends, holds up OOS. That gap between in-sample and walk-forward is the difference between a
+backtest that sells and one you can trade — and it's the thing most retail backtests hide.
+
 ## Demo
 
 ![Equity curves](data/equity_curves.png)
@@ -72,11 +99,12 @@ Every strategy implements one tiny interface (`signal(ohlcv) -> position`), so a
 - **Engine:** pandas, NumPy (fully vectorised)
 - **Strategies:** buy & hold, SMA crossover, RSI mean-reversion, **Donchian breakout**, **Bollinger mean-reversion**
 - **Metrics:** CAGR, annualised Sharpe, **Sortino** (downside-only risk), max drawdown, Calmar, volatility
+- **Validation:** **walk-forward parameter optimization** (in-sample tune → out-of-sample trade)
 - **Data:** deterministic synthetic generator (default) · optional `yfinance` for real NSE history
 - **App:** Streamlit dashboard
 - **Observability:** structured logging via `src/logging_utils.py` (`LOG_LEVEL` env, per-strategy timing)
 - **Deploy:** `Dockerfile` + `docker-compose.yml`; GitHub Actions CI runs the suite
-- **Tests:** pytest (24 tests)
+- **Tests:** pytest (30 tests)
 
 ## Setup & run
 
@@ -110,9 +138,10 @@ python -m src.run_backtest
 │   ├── strategies.py       # BuyAndHold, SMA, RSI, Donchian, Bollinger
 │   ├── backtest.py         # vectorised engine (no look-ahead, costs on turnover)
 │   ├── metrics.py          # CAGR / Sharpe / Sortino / drawdown / Calmar
+│   ├── walkforward.py      # walk-forward parameter optimization (IS tune -> OOS trade)
 │   ├── logging_utils.py    # structured logging + timing
 │   └── run_backtest.py     # full comparison + equity-curve plot
-├── tests/                  # 24 pytest tests
+├── tests/                  # 30 pytest tests
 ├── Dockerfile              # containerised Streamlit app
 ├── docker-compose.yml
 ├── .github/workflows/ci.yml
@@ -124,7 +153,6 @@ python -m src.run_backtest
 ## Possible extensions
 
 - **Long/short and position sizing** (volatility targeting, Kelly-capped).
-- **Walk-forward optimisation** to guard against curve-fitting the SMA windows.
 - **Slippage & market-impact models** beyond a flat per-trade cost.
 - **Benchmark vs NIFTY 50** and report alpha / beta / information ratio.
 - **Parameter heatmaps** (fast × slow) to visualise robustness, not just the best cell.
